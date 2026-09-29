@@ -112,19 +112,36 @@ tr[data-pick]:active td,tr[data-pick]:hover td{background:rgba(242,210,10,.07)}
 tr.mine td{color:var(--hivis);font-weight:700}
 .stamp{display:inline-block;font-family:var(--stencil);font-weight:900;text-transform:uppercase;font-size:12px;letter-spacing:.06em;color:var(--blood);border:2px solid var(--blood);padding:0 4px;transform:rotate(-6deg);margin-left:4px;vertical-align:2px}
 
-/* ---------- player card ---------- */
-.pcell{display:flex;align-items:center;gap:10px}
-.pcell .helmet{flex:0 0 auto;filter:drop-shadow(2px 2px 0 rgba(0,0,0,.5))}
-.card{display:flex;gap:14px;align-items:flex-end;padding:12px 14px 12px 8px;margin-top:14px;position:relative;
-  background:linear-gradient(135deg,rgba(255,95,31,.9),rgba(227,38,47,.85));border:3px solid #000;box-shadow:6px 6px 0 #000;transform:rotate(-1deg)}
-.card::after{content:"";position:absolute;inset:6px;border:2px dashed rgba(0,0,0,.45);pointer-events:none}
-.card-art{flex:0 0 auto;margin:-18px 0 -6px;filter:drop-shadow(4px 4px 0 rgba(0,0,0,.55))}
-.card-id{min-width:0;padding-bottom:4px}
-.card .tag{color:var(--chalk);text-shadow:3px 3px 0 #000;font-size:clamp(30px,8.5vw,44px)}
-.card .pmeta{color:#1A1917;font-weight:600}
-.card .from{color:#000;text-decoration:underline}
-.rating{margin:6px 0 0;font-family:var(--marker);font-size:15px;color:#000}
-.rating span{font-family:var(--stencil);font-weight:900;font-size:34px;color:var(--hivis);-webkit-text-stroke:1.5px #000;margin-right:4px;vertical-align:-4px}
+/* ---------- heat map ---------- */
+.heat-wrap{padding:10px 8px}
+.heat{display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.hrow{display:grid;grid-template-columns:minmax(74px,1.5fr) repeat(var(--cols),minmax(0,1fr)) 42px;gap:2px;align-items:stretch}
+.hn{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:5px 4px 5px 0;align-self:center}
+.hc{min-height:26px;display:flex;align-items:center;justify-content:center;font-family:var(--stencil);font-weight:900;font-size:12px;color:#000;border-radius:1px;background:rgba(0,0,0,.2)}
+.hl{font-family:var(--stencil);font-weight:700;font-size:11px;color:var(--dust);text-align:center;align-self:end;padding-bottom:2px;white-space:nowrap}
+.hw{font-family:var(--stencil);font-weight:900;font-size:15px;text-align:right;align-self:center}
+.hhead .hn,.hhead .hw{font-family:var(--stencil);font-weight:700;font-size:11px;color:var(--dust);text-transform:uppercase;letter-spacing:.03em;align-self:end}
+.hc.mycol,.hl.mycol{box-shadow:inset 2px 0 0 var(--blood),inset -2px 0 0 var(--blood)}
+.hl.mycol{color:var(--blood)}
+.you .hn{color:var(--hivis);font-family:var(--marker);font-weight:400;font-size:15px}
+.you .hc{background:transparent}
+.you .hc.mine{background:var(--blood);color:var(--chalk);font-size:11px;box-shadow:none;transform:rotate(-3deg)}
+.you{padding-bottom:4px;border-bottom:2px dashed var(--seam);margin-bottom:2px}
+
+/* ---------- bye strip ---------- */
+.wkstrip{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;padding:14px 0 4px;min-height:120px}
+.wkcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;padding:4px 0 2px;border-radius:2px}
+.wkbar{width:70%;max-width:18px;background:var(--cash);box-shadow:2px 0 0 #000}
+.wkg{font-family:var(--stencil);font-weight:900;font-size:13px;line-height:1}
+.wkn{font-family:var(--stencil);font-weight:700;font-size:12px;color:var(--dust)}
+.wkcol.hole{background:rgba(242,210,10,.16);box-shadow:inset 0 -3px 0 var(--hivis)}
+.wkcol.hole .wkbar{background:var(--hivis)}
+.wkcol.hisbye{background:repeating-linear-gradient(-45deg,rgba(227,38,47,.28) 0 5px,transparent 5px 10px)}
+.wkcol.hisbye .wkg{color:var(--blood);font-size:11px}
+.strip-legend{margin:4px 0 8px}
+.sw-hole,.sw-his{display:inline-block;width:14px;height:12px;border:1px solid #000;margin-left:8px}
+.sw-hole{background:var(--hivis);margin-left:0}
+.sw-his{background:repeating-linear-gradient(-45deg,var(--blood) 0 3px,transparent 3px 6px)}
 
 /* ---------- figures ---------- */
 .figs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:14px 0 0}
@@ -569,6 +586,39 @@ function spendRate(model) {
   return spent / model.alive.length / runs;
 }
 
+// NFL bye week for each team, from the schedule
+function byeWeeks(model) {
+  if (model._byes) return model._byes;
+  const teams = new Set(); const plays = {};
+  model.schedule.forEach(g => { teams.add(g.home); teams.add(g.away); (plays[g.week] = plays[g.week] || new Set()).add(g.home); plays[g.week].add(g.away); });
+  const out = {};
+  teams.forEach(t => { for (let w = 1; w <= LAST_WEEK; w++) if (plays[w] && !plays[w].has(t)) { out[t] = w; break; } });
+  return (model._byes = out);
+}
+
+// Week-by-week lineup gain from adding p, counting both his bye and the team's byes.
+// Returns the per-week gains and a weighted average (nearer weeks count more:
+// in a guillotine you have to survive them first).
+function byeAwareUpgrade(model, team, p, ctx) {
+  ctx = ctx || (model._ctx || (model._ctx = simWeeks(model)));
+  const cache = model._wm || (model._wm = {});
+  const key = team.rid + ':' + team.active.length;
+  const base = cache[key] || (cache[key] = weeklyMeans(model, team.active, ctx));
+  const withP = weeklyMeans(model, team.active.concat([p.id]), ctx);
+  const gains = withP.map((v, i) => v - base[i]);
+  let num = 0, den = 0;
+  gains.forEach((g, i) => { const w = Math.pow(0.9, i); num += w * g; den += w; });
+  return { gains, weeks: ctx.weeks, avg: den ? num / den : 0, base };
+}
+
+// Which of a team's starters are on bye each coming week
+function teamByeHoles(model, team, ctx) {
+  ctx = ctx || (model._ctx || (model._ctx = simWeeks(model)));
+  const byes = byeWeeks(model);
+  const starters = (model.lineupFn(team.active, 'val') || []).filter(s => s.pid).map(s => model.players[s.pid]);
+  return ctx.weeks.map(w => starters.filter(q => byes[q.team] === w));
+}
+
 function survivors(model) {
   // teams still alive after the current week (drop a clinched chop)
   return model.alive.filter(t => !t.clinchedChop);
@@ -653,14 +703,48 @@ function winCurve(model, plan, profiles) {
   const target = Math.max(1, plan.pct * typical);       // league-history clearing price
   let lo = 0.001, hi = 3;
   for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (make(mid)(target) > 0.5) lo = mid; else hi = mid; }
-  const pWin = base.length ? make((lo + hi) / 2) : () => 1;
+  const c = (lo + hi) / 2;
+  const pWin = base.length ? make(c) : () => 1;
+  // expose each rival's bid distribution: P(their bid <= b); bids above their budget are capped at it
+  base.forEach(r => {
+    r.mean = Math.max(0.5, Math.min(r.rem, c * r.w));
+    r.cdf = (b) => b >= r.rem ? 1 : b <= 0 ? 1 - r.pBid : (1 - r.pBid) + r.pBid * normCdf((Math.log(b) - Math.log(r.mean)) / sd);
+  });
   const bidFor = (t) => { for (let b = 0; b <= plan.myRem; b++) if (pWin(b) >= t) return b; return null; };
   return { rivals: base, pWin, bidFor, target };
+}
+
+// Who takes him at a given bid of yours: P(each rival ends up the top bid) and P(you do)
+function whoWins(wc, myBid) {
+  const R = wc.rivals; if (!R.length) return { you: 1, teams: [] };
+  const top = Math.max(...R.map(r => r.rem));
+  const cdfs = R.map(r => { const a = new Float64Array(top + 1); for (let x = 0; x <= top; x++) a[x] = r.cdf(x); return a; });
+  const win = R.map(() => 0);
+  for (let x = 1; x <= top; x++) {
+    if (x <= myBid) continue;               // you win ties at your bid or below
+    for (let i = 0; i < R.length; i++) {
+      const pm = cdfs[i][x] - cdfs[i][x - 1]; if (pm <= 0) continue;
+      let others = 1;
+      for (let j = 0; j < R.length; j++) if (j !== i) others *= cdfs[j][Math.min(x - 1, top)];
+      win[i] += pm * others;
+    }
+  }
+  return { you: wc.pWin(myBid + 0.5), teams: R.map((r, i) => ({ r, p: win[i] })) };
 }
 
 // the full recommendation for one player
 function strategy(model, p, myRid, ownerRid, cache) {
   const plan = bidPlan(model, p, myRid, ownerRid);
+  // replace season-average fit with bye-aware, week-by-week fit for you and every rival
+  const ctx = model._ctx || (model._ctx = simWeeks(model));
+  const mine = plan.me && plan.me.alive ? byeAwareUpgrade(model, plan.me, p, ctx) : null;
+  plan.myUp = mine ? mine.avg : 0; plan.myWeeks = mine;
+  plan.rivals.forEach(r => { const u = byeAwareUpgrade(model, r.t, p, ctx); r.up = u.avg; r.weeks = u; });
+  plan.interested = plan.rivals.filter(r => r.up > 0.5 && r.rem > 0).sort((a, b) => b.rem - a.rem);
+  const top = plan.interested[0], second = plan.interested[1];
+  const cap = (n) => Math.max(0, Math.min(plan.myRem, Math.round(n)));
+  plan.lock = top ? cap(top.rem + 1) : cap(1);
+  plan.beatMost = second ? cap(second.rem + 1) : plan.lock;
   const profiles = cache.profiles || (cache.profiles = rivalProfiles(model));
   const base = cache.base || (cache.base = simulate(model, myRid));
   const withP = simulate(model, myRid, { add: [p.id] });
@@ -724,87 +808,6 @@ function analyze(model, myRid, candidates) {
   return { base, rows, future, bestLater, bestNow, benchmark, waitWins, cash0, rate: base.rate, nowShare };
 }
 
-
-// ---------- Street-style player avatars (original characters in team colors) ----------
-const TEAM_COLORS = {
-  ARI: ['#97233F', '#FFB612'], ATL: ['#A71930', '#111111'], BAL: ['#241773', '#9E7C0C'], BUF: ['#00338D', '#C60C30'],
-  CAR: ['#0085CA', '#101820'], CHI: ['#0B162A', '#C83803'], CIN: ['#FB4F14', '#111111'], CLE: ['#311D00', '#FF3C00'],
-  DAL: ['#003594', '#869397'], DEN: ['#FB4F14', '#002244'], DET: ['#0076B6', '#B0B7BC'], GB: ['#203731', '#FFB612'],
-  HOU: ['#03202F', '#A71930'], IND: ['#002C5F', '#A2AAAD'], JAX: ['#006778', '#D7A22A'], KC: ['#E31837', '#FFB81C'],
-  LV: ['#111111', '#A5ACAF'], LAC: ['#0080C6', '#FFC20E'], LAR: ['#003594', '#FFD100'], MIA: ['#008E97', '#FC4C02'],
-  MIN: ['#4F2683', '#FFC62F'], NE: ['#002244', '#C60C30'], NO: ['#D3BC8D', '#101820'], NYG: ['#0B2265', '#A71930'],
-  NYJ: ['#125740', '#FFFFFF'], PHI: ['#004C54', '#A5ACAD'], PIT: ['#101820', '#FFB612'], SF: ['#AA0000', '#B3995D'],
-  SEA: ['#002244', '#69BE28'], TB: ['#D50A0A', '#34302B'], TEN: ['#0C2340', '#4B92DB'], WAS: ['#5A1414', '#FFB612']
-};
-const BUILD = { QB: [1, 1], RB: [1.12, .92], WR: [.9, 1.08], TE: [1.2, 1.04], K: [.85, .95], DEF: [1.3, 1], DL: [1.35, 1], LB: [1.2, 1], DB: [.95, 1.02] };
-function hashId(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
-
-// full-body card for the bid lab
-function avatarSVG(p, size = 150) {
-  const [c1, c2] = TEAM_COLORS[p.team] || ['#5A5650', '#F2D20A'];
-  const [wide, tall] = BUILD[p.pos] || [1, 1];
-  const h = hashId(p.id);
-  const visor = ['#1B1B1B', '#2A3F5F', '#4A2A5F', '#5F4A1A'][h % 4];
-  const sleeve = h & 16 ? '#111' : '#EEE';
-  const pose = p.pos === 'QB' ? 'throw' : p.pos === 'WR' ? 'point' : 'tuck';
-  const sx = wide, sy = tall;
-  const id = 'a' + h.toString(36);
-  const ball = `<g transform="rotate(-30)"><ellipse rx="11" ry="7" fill="#7A3B1B" stroke="#000" stroke-width="3"/><path d="M-5 0h10M-2-3v6M2-3v6" stroke="#fff" stroke-width="1.6"/></g>`;
-  const arm = pose === 'throw' ? { d: 'M88 64 Q104 46 100 26', hand: [100, 22], ball: [101, 11] }
-    : pose === 'point' ? { d: 'M88 64 Q108 60 115 48', hand: [116, 46] }
-    : { d: 'M88 64 Q100 90 88 100', hand: [88, 101], ball: [78, 100] };
-  const armR = `<path d="${arm.d}" stroke="#000" stroke-width="19" fill="none" stroke-linecap="round"/>
-    <path d="${arm.d}" stroke="${c1}" stroke-width="13" fill="none" stroke-linecap="round"/>
-    ${arm.ball && pose === 'tuck' ? `<g transform="translate(${arm.ball})">${ball}</g>` : ''}
-    <circle cx="${arm.hand[0]}" cy="${arm.hand[1]}" r="7" fill="${sleeve}" stroke="#000" stroke-width="3"/>
-    ${arm.ball && pose !== 'tuck' ? `<g transform="translate(${arm.ball})">${ball}</g>` : ''}`;
-  const label = (p.pos || '').slice(0, 3);
-  const helmetOnly = p.pos === 'DEF';
-  if (helmetOnly) return helmetSVG(p, size);
-  return `<svg class="avatar" viewBox="0 0 130 150" width="${size}" height="${size * 150 / 130}" role="img" aria-label="Street-style ${esc(p.pos)} in ${esc(p.team || 'free agent')} colors">
-  <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
-  <ellipse cx="65" cy="142" rx="${34 * sx}" ry="6" fill="#000" opacity=".45"/>
-  <g transform="translate(65 0) scale(${sx} ${sy}) translate(-65 0)" stroke-linejoin="round">
-    <!-- legs -->
-    <path d="M50 104 L46 132 M78 104 L84 132" stroke="#000" stroke-width="19" stroke-linecap="round"/>
-    <path d="M50 104 L46 132 M78 104 L84 132" stroke="${c2}" stroke-width="13" stroke-linecap="round"/>
-    <path d="M40 136 h14 M78 136 h16" stroke="#000" stroke-width="9" stroke-linecap="round"/>
-    <!-- left arm -->
-    <path d="M42 64 Q26 80 34 96" stroke="#000" stroke-width="19" fill="none" stroke-linecap="round"/>
-    <path d="M42 64 Q26 80 34 96" stroke="${c1}" stroke-width="13" fill="none" stroke-linecap="round"/>
-    <circle cx="35" cy="98" r="7" fill="${sleeve}" stroke="#000" stroke-width="3"/>
-    <!-- torso + pads -->
-    <path d="M40 60 Q65 50 90 60 L86 108 Q65 114 44 108 Z" fill="${c1}" stroke="#000" stroke-width="4"/>
-    <path d="M30 62 Q34 46 56 48 L74 48 Q96 46 100 62 Q92 70 86 66 Q65 58 44 66 Q38 70 30 62 Z" fill="${c1}" stroke="#000" stroke-width="4"/>
-    <path d="M36 60 Q50 52 64 54" stroke="${c2}" stroke-width="4" fill="none"/>
-    <text x="65" y="86" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="900" font-size="26" fill="${c2}" stroke="#000" stroke-width="1.5" paint-order="stroke">${esc(label)}</text>
-    <!-- right arm -->
-    ${armR}
-  </g>
-  <!-- helmet (not scaled: big head is the look) -->
-  <g transform="translate(65 34)">
-    <path d="M-27 6 A27 27 0 1 1 25 12 L22 20 L-4 20 Q-8 26 -18 24 Z" fill="${c1}" stroke="#000" stroke-width="4"/>
-    <path d="M-2 -26 Q2 -2 -2 20" stroke="${c2}" stroke-width="6" fill="none"/>
-    <path d="M-27 6 A27 27 0 0 1 -12 -22" stroke="url(#${id}g)" stroke-width="10" fill="none"/>
-    <path d="M4 -2 Q20 -4 27 4 L25 14 Q14 16 4 12 Z" fill="${visor}" stroke="#000" stroke-width="3"/>
-    <path d="M9 1 L20 1" stroke="#fff" stroke-width="2" opacity=".6"/>
-    <path d="M22 16 L32 18 M18 22 L31 24 M30 8 L33 24" stroke="#9A9A9A" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="-8" cy="4" r="5" fill="${c2}" stroke="#000" stroke-width="2"/>
-  </g>
-</svg>`;
-}
-
-// helmet badge for lists
-function helmetSVG(p, size = 34) {
-  const [c1, c2] = TEAM_COLORS[p.team] || ['#5A5650', '#F2D20A'];
-  const visor = ['#1B1B1B', '#2A3F5F', '#4A2A5F', '#5F4A1A'][hashId(p.id) % 4];
-  return `<svg class="helmet" viewBox="-36 -36 76 70" width="${size}" height="${size * 70 / 76}" aria-hidden="true">
-    <path d="M-27 6 A27 27 0 1 1 25 12 L22 20 L-4 20 Q-8 26 -18 24 Z" fill="${c1}" stroke="#000" stroke-width="4"/>
-    <path d="M-2 -26 Q2 -2 -2 20" stroke="${c2}" stroke-width="6" fill="none"/>
-    <path d="M4 -2 Q20 -4 27 4 L25 14 Q14 16 4 12 Z" fill="${visor}" stroke="#000" stroke-width="3"/>
-    <path d="M22 16 L32 18 M18 22 L31 24 M30 8 L33 24" stroke="#9A9A9A" stroke-width="3" stroke-linecap="round"/>
-  </svg>`;
-}
 
 // ---------- UI ----------
 const DEFAULT_LEAGUE = '1400564478587719680';
@@ -906,6 +909,78 @@ function header() {
   </nav>`;
 }
 
+function byeTxt(p) {
+  const w = byeWeeks(S.model)[p.team];
+  return w && w >= S.model.week ? `, bye ${w}` : '';
+}
+
+// ---------- bye-week fit strip ----------
+function byeFit(st, p) {
+  const m = S.model, W = st.plan.myWeeks;
+  if (!W) return '';
+  const holes = teamByeHoles(m, m.byRid[S.myRid]);
+  const his = byeWeeks(m)[p.team];
+  const n = Math.min(W.weeks.length, 12);
+  const max = Math.max(1, ...W.gains.slice(0, n));
+  const cols = W.weeks.slice(0, n).map((w, i) => {
+    const g = W.gains[i], h = holes[i] || [];
+    const cls = w === his ? 'hisbye' : h.length ? 'hole' : '';
+    return `<div class="wkcol ${cls}" title="Week ${w}: ${g > 0 ? '+' + f1(g) : '0'}${h.length ? ', your bye: ' + h.map(q => q.name).join(', ') : ''}">
+      <span class="wkbar" style="height:${Math.max(2, (Math.max(0, g) / max) * 64)}px"></span>
+      <span class="wkg">${w === his ? 'BYE' : g >= 0.5 ? '+' + Math.round(g) : '·'}</span>
+      <span class="wkn">${w}</span></div>`;
+  }).join('');
+  const covered = W.weeks.slice(0, n).map((w, i) => ({ w, g: W.gains[i], h: holes[i] || [] }))
+    .filter(x => x.h.length && x.g > Math.max(1, st.plan.myUp * 1.2));
+  const clash = W.weeks.indexOf(his) >= 0 ? (holes[W.weeks.indexOf(his)] || []) : [];
+  const lines = [];
+  if (covered.length) lines.push(`Fills your bye holes in week${covered.length > 1 ? 's' : ''} ${covered.map(x => x.w).join(', ')} (${[...new Set(covered.flatMap(x => x.h.map(q => q.name)))].join(', ')} out). That\u2019s where he earns his money.`);
+  if (clash.length) lines.push(`Heads up: his bye (week ${his}) lands the same week ${clash.map(q => q.name).join(' and ')} ${clash.length > 1 ? 'are' : 'is'} out. Double whammy.`);
+  else if (his && W.weeks.includes(his)) lines.push(`His bye is week ${his}, a week you\u2019re otherwise at full strength.`);
+  return `
+  <section>
+    <h2 class="stencil">Bye-week fit</h2>
+    <div class="slab"><div class="wkstrip">${cols}</div>
+    <p class="legend strip-legend"><span class="sw-hole"></span> your starter on bye <span class="sw-his"></span> his bye</p></div>
+    <p class="note">Points a game he adds to your best lineup each week, counting his bye and yours. The number used for bids weights nearer weeks more, since you have to survive those first: <b>+${f1(st.plan.myUp)}</b> a week.</p>
+    ${lines.map(l => `<p class="callout">${l}</p>`).join('')}
+  </section>`;
+}
+
+// ---------- bid heat map ----------
+function heatColor(v) { // v 0..1
+  if (v <= 0.005) return 'transparent';
+  const hue = 18 + 34 * Math.min(1, v);            // spray orange to hi-vis yellow
+  const light = 38 + 16 * Math.min(1, v);
+  return `hsla(${hue},100%,${light}%,${0.18 + 0.82 * Math.min(1, v)})`;
+}
+function heatHTML() {
+  const st = S.st; if (!st) return '';
+  const R = st.wc.rivals;
+  if (!R.length) return `<p class="empty-state">Nobody else would start him. A buck probably does it.</p>`;
+  const niceSteps = [10, 25, 50, 75, 100, 150, 200, 250];
+  const upper = Math.min(Math.max(...R.map(r => r.rem)), Math.max(40, st.b80 || 0, ...R.map(r => r.mean * 2.6)));
+  const step = niceSteps.find(s => s * 7 >= upper) || 250;
+  const edges = [1]; for (let i = 1; i <= 7; i++) edges.push(i * step);
+  const labels = ['None', ...edges.slice(0, -1).map((e, i) => i === 0 ? `<${edges[1]}` : `${edges[i]}`), `${edges[7]}+`];
+  const ww = whoWins(st.wc, S.bid);
+  const rows = ww.teams.map(({ r, p }) => {
+    const cells = [1 - r.pBid];
+    for (let i = 0; i < 7; i++) cells.push(r.cdf(edges[i + 1] - 1) - r.cdf(edges[i] - 1));
+    cells.push(1 - r.cdf(edges[7] - 1));
+    return { r, p, cells };
+  }).sort((a, b) => b.p - a.p);
+  const vmax = Math.max(...rows.flatMap(x => x.cells.slice(1)), 0.01);
+  const myCol = S.bid < 1 ? 0 : S.bid >= edges[7] ? 8 : 1 + edges.findIndex((e, i) => S.bid >= e && S.bid < edges[i + 1]);
+  const cell = (v, i, isNone) => `<span class="hc ${i === myCol ? 'mycol' : ''}" style="background:${isNone ? `rgba(171,165,152,${0.1 + 0.5 * v})` : heatColor(v / vmax)}" title="${pct(v)}">${v >= 0.1 ? Math.round(v * 100) : ''}</span>`;
+  return `
+  <div class="heat" style="--cols:${labels.length}">
+    <div class="hrow hhead"><span class="hn">Their bid ($)</span>${labels.map((l, i) => `<span class="hl ${i === myCol ? 'mycol' : ''}">${l}</span>`).join('')}<span class="hw">Takes him</span></div>
+    <div class="hrow you"><span class="hn">You</span>${labels.map((_, i) => `<span class="hc ${i === myCol ? 'mycol mine' : ''}">${i === myCol ? money(S.bid) : ''}</span>`).join('')}<span class="hw cash">${pct(ww.you)}</span></div>
+    ${rows.map(x => `<div class="hrow"><span class="hn" title="${esc(x.r.t.name)}">${esc(x.r.t.name)}</span>${x.cells.map((v, i) => cell(v, i, i === 0)).join('')}<span class="hw">${x.p >= 0.005 ? pct(x.p) : '–'}</span></div>`).join('')}
+  </div>`;
+}
+
 // ---------- waiver wire ----------
 function viewPool() {
   const m = S.model;
@@ -930,8 +1005,8 @@ function poolList() {
     <thead><tr><th>Player</th><th title="Projected points per game in your scoring">Proj/gm</th><th>This wk</th><th>Avg</th></tr></thead>
     <tbody>${rows.map(p => `
       <tr data-pick="${esc(p.id)}" tabindex="0">
-        <td><div class="pcell">${helmetSVG(p, 34)}<div><span class="pname">${esc(p.name)}</span>
-          <span class="pmeta">${p.pos} ${esc(p.team)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}</span>` : ''}</span></div></div></td>
+        <td><span class="pname">${esc(p.name)}</span>
+          <span class="pmeta">${p.pos} ${esc(p.team)}${byeTxt(p)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}</span>` : ''}</span></td>
         <td class="num big-n">${f1(p.val)}</td><td class="num">${f1(p.wk)}</td><td class="num">${f1(p.std)}</td>
       </tr>`).join('') || `<tr><td colspan="4" class="empty">Nobody here. Clear the search or try another position.</td></tr>`}
     </tbody></table></div>
@@ -989,7 +1064,7 @@ function viewStrategy() {
   const me = m.byRid[S.myRid];
   const nc = an.nc;
   const f3 = at(3);
-  const expSpend = an.rows.reduce((a, st) => a + st.rec * st.recWin, 0);
+  const expSpend = an.rows.filter(st => st.rec > 1 && st.recWin >= 0.1).slice(0, 10).reduce((a, st) => a + st.rec * st.recWin, 0);
   const safe = b.p[0];
   const mood = safe >= 0.9 ? 'You\u2019re not the one sweating this week.' : safe >= 0.75 ? 'You\u2019re in the mix. Don\u2019t get cute.' : 'Your neck is on the block. Spend like it.';
   const verdictTxt = an.waitWins
@@ -1023,9 +1098,9 @@ function viewStrategy() {
     <h2 class="stencil">Week ${w0} hit list</h2>
     ${nc ? `<p class="note">${nc.clinchedChop ? `${esc(nc.name)} is done. Their whole roster hits the wire.` : `Assumes ${esc(nc.name)} gets chopped. They\u2019re lowest right now.`} Bids balance your odds of winning against what each guy is worth to you, counting everything you can buy later.</p>` : ''}
     ${an.rows.length ? `<div class="slab scroll"><table class="grid"><thead><tr><th>Player</th><th>Bid</th><th>Odds</th><th title="Price that wins about half the time">Market</th><th title="What he\u2019s worth to you in dollars">Worth</th></tr></thead><tbody>
-      ${an.rows.map(st => { const p = st.p; const fromNc = nc && nc.players.includes(p.id);
+      ${an.rows.filter(st => st.rec > 1 && st.recWin >= 0.1).slice(0, 10).map(st => { const p = st.p; const fromNc = nc && nc.players.includes(p.id);
         return `<tr data-pick="${esc(p.id)}" tabindex="0">
-        <td><div class="pcell">${helmetSVG(p, 34)}<div><span class="pname">${esc(p.name)}</span><span class="pmeta">${p.pos} ${esc(p.team)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${fromNc ? ` <span class="from">off ${esc(nc.name)}</span>` : p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}</span>` : ''}</span></div></div></td>
+        <td><span class="pname">${esc(p.name)}</span><span class="pmeta">${p.pos} ${esc(p.team)}${byeTxt(p)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${fromNc ? ` <span class="from">off ${esc(nc.name)}</span>` : p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}</span>` : ''}</span></td>
         <td class="num cash big-n">${st.rec ? money(st.rec) : '<span class="pmeta">pass</span>'}</td>
         <td class="num">${st.rec ? pct(st.recWin) : '–'}</td>
         <td class="num">${money(st.b50)}</td>
@@ -1051,7 +1126,7 @@ function viewBid() {
   if (S.bid == null || S.bid > plan.myRem) S.bid = st.rec || 0;
   const max = Math.max(plan.myRem, ...plan.rivals.map(r => r.rem), 1);
   S.plan = plan; S.max = max; S.st = st;
-  const fit = plan.myUp > 0.5 ? `He starts for you: <b>+${f1(plan.myUp)}</b> points a game over your weakest guy he\u2019d replace. Title odds go ${pct(st.base.win)} to ${pct(st.withP.win)}.`
+  const fit = plan.myUp > 0.5 ? `He starts for you: <b>+${f1(plan.myUp)}</b> points a week over your weakest guy he\u2019d replace, byes included. Title odds go ${pct(st.base.win)} to ${pct(st.withP.win)}.`
     : `He wouldn\u2019t crack your lineup. Only bid to keep him away from someone scary.`;
   const top = plan.interested[0];
   const steps = [
@@ -1062,14 +1137,8 @@ function viewBid() {
   ].filter(x => x[1] != null);
   return `
   <section class="player">
-    <div class="card">
-      <div class="card-art">${avatarSVG(p, 132)}</div>
-      <div class="card-id">
-        <h2 class="tag">${esc(p.name)}</h2>
-        <p class="pmeta">${p.pos} ${esc(p.team)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}, chopped week ${p.chopped.week}</span>` : ''}</p>
-        <p class="rating"><span>${Math.round(Math.min(99, 40 + (p.val || 0) * 3))}</span> street rating</p>
-      </div>
-    </div>
+    <h2 class="tag">${esc(p.name)}</h2>
+    <p class="pmeta">${p.pos} ${esc(p.team)}${byeTxt(p)}${p.inj ? ` <b class="inj">${esc(p.inj)}</b>` : ''}${p.chopped ? ` <span class="from">off ${esc(p.chopped.team)}, chopped week ${p.chopped.week}</span>` : ''}</p>
     <dl class="figs"><div><dt>Proj/gm</dt><dd>${f1(p.val)}</dd></div><div><dt>Worth to you</dt><dd class="cash">${money(st.worth)}</dd></div><div><dt>Market</dt><dd>${money(st.b50)}</dd></div><div><dt>Your bag</dt><dd class="cash">${money(plan.myRem)}</dd></div></dl>
     ${owner ? `<p class="note">Still on ${esc(owner.name)}. This assumes they get chopped and he hits the wire.</p>` : ''}
     <p class="callout">${fit}</p>
@@ -1079,6 +1148,8 @@ function viewBid() {
     <h2 class="stencil">Pick your bid</h2>
     <div class="steps">${steps.map(([l, v, why]) => `<button class="step" data-setbid="${v}" aria-pressed="${S.bid === v}"><span class="sl">${l}</span><span class="sv">${money(v)}</span><span class="sw">${why}</span></button>`).join('')}</div>
   </section>
+
+  ${byeFit(st, p)}
 
   <section class="ladder-wrap">
     <h2 class="stencil">Where it lands</h2>
@@ -1093,12 +1164,18 @@ function viewBid() {
   </section>
 
   <section>
+    <h2 class="stencil">Bid heat map</h2>
+    <p class="note">Each row is a rival who\u2019d start him: how likely their bid lands in each price range, from how they\u2019ve bid all season and how badly they need him. The outlined column is your bid. "Takes him" is who actually walks away with him at your bid.</p>
+    <div class="slab heat-wrap" id="heat">${heatHTML()}</div>
+  </section>
+
+  <section>
     <h2 class="stencil">Who\u2019s coming for him</h2>
     <div class="slab scroll"><table class="grid"><thead><tr><th>Team</th><th>Bag</th><th>Upgrade</th><th title="Chance they bid at all, from their history">Bids?</th></tr></thead><tbody>
       ${[...st.wc.rivals].sort((a, b) => b.rem - a.rem).map(r => `
         <tr><td>${esc(r.t.name)}</td><td class="num cash">${money(r.rem)}</td><td class="num">+${f1(r.up)}</td><td class="num">${pct(r.pBid)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nobody. Free money.</td></tr>'}
     </tbody></table></div>
-    <p class="note">"Bids?" comes from how often each team has chased big names this season. How much they bid also reflects how reckless they\u2019ve been with their bag.</p>
+    <p class="note">Upgrade is bye-aware for each rival too: a guy who fills their bye holes makes them hungrier. "Bids?" comes from how often each team has chased big names this season. How much they bid also reflects how reckless they\u2019ve been with their bag.</p>
   </section>`;
 }
 
@@ -1178,6 +1255,7 @@ document.addEventListener('input', (e) => {
     S.bid = +e.target.value;
     const b = $('#blade'); b.style.left = (S.bid / S.max) * 100 + '%'; b.querySelector('em').textContent = money(S.bid);
     $('#verdict').innerHTML = verdict();
+    clearTimeout(S.heatT); S.heatT = setTimeout(() => { const h = $('#heat'); if (h) h.innerHTML = heatHTML(); }, 60);
     document.querySelectorAll('[data-setbid]').forEach(x => x.setAttribute('aria-pressed', +x.dataset.setbid === S.bid));
   }
 });
